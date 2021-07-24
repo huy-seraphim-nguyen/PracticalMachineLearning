@@ -1,0 +1,135 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "Huy Nguyen"
+date: "July 24, 2021"
+output:
+  html_document: default
+
+---
+
+# Overview
+
+In this report, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  
+
+Our goal is to predict the manner in which they did the exercise. This manner is defined by the "classe" variable in the training dataset.
+
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+ 
+# 1. Loading libraries and data
+
+NB: To run this R code, the 2 data files (pml-training.csv and pml-testing.csv) must be put in the current working directory.
+
+```{r, echo=TRUE}
+library(knitr)
+library(caret)
+library(randomForest)
+ 
+#Training data file must be in working directory
+trainingData <- read.csv("pml-training.csv")
+dim(trainingData)
+``` 
+
+The training dataset has 19622 observations of 160 variables.  
+
+Since the training dataset is quite large, we will choose the RandomForest model which gives quite high accuracy while lowering the risk of overfitting for large dataset.
+ 
+
+# 2. Cleaning data 
+
+The inspection of the pml-training.csv file shows that  
+- the first 7 variables are not relevant to the calculation. They are all about index, user name, time stamp and windows   
+- there are lots of "NA", "" and "#DIV/0!" values    
+
+First we will remove the first 7 variables.  
+Then we will remove those containing "NA","", "#DIV/0!".  
+Finally we will remove near zero variance ones.   
+ 
+```{r, echo=TRUE}
+
+#Removing first 7 variables irrelevant to the outcome
+trainingData <- trainingData[,-c(1:7)] 
+
+#Remove NAs variables. Create a matrix where element "TRUE" indicates "NA"  
+d1 <- is.na(trainingData)
+
+#Sum the values of each column. If sum=0, there is no "NA" in this column.
+#Keep only columns with useful values
+trainingData <- trainingData[,colSums(d1) == 0]
+
+#Removing near zero variance variables
+nzv <- nearZeroVar(trainingData)
+trainingData <- trainingData[,-nzv]
+dim(trainingData)
+
+``` 
+
+The number of variables has been reduced to 53. 
+
+
+# 3. Partitioning and constructing RandomForest model 
+ 
+Partition the training data to train/test sets, then construct the RandomForest model using a 3-folds cross validation. 
+
+```{r, echo=TRUE}
+
+#Create partition into train and test dataset
+inTrain  <- createDataPartition(y=trainingData$classe, p=0.7, list=FALSE)
+trainSet <- trainingData[ inTrain,]
+testSet  <- trainingData[-inTrain,]
+
+#Set seed for reproducibility
+set.seed(1234)
+
+#3-folds cross validation
+control <- trainControl(method="cv", number=3, verboseIter=FALSE)
+
+#Construct the RandomForest model
+modRF <- train(classe ~ ., data=trainSet, method="rf", trControl = control)
+modRF
+
+#Plot the model
+plot(modRF) 
+
+```
+  
+    
+# 4. Prediction
+
+Perform prediction using the partition test set.
+
+```{r, echo=TRUE}
+predRF <- predict(modRF, testSet)
+
+#Check the accuracy of the model
+cm <- confusionMatrix(predRF, factor(testSet$classe))
+cm
+
+#Print out accuracy
+cm$overall[["Accuracy"]]
+ 
+```
+
+As shown, accuracy is quite high and lies within the 95% confidence interval, as expected with a RandfomForest model for a large dataset.
+ 
+ 
+# 5. Applying the Selected Model to the Test Data
+Use the test data and predict the outcome for 20 observations with our Random Forest model.  
+The results will be used to answer the questions in the "Course Project Prediction Quiz".  
+The test data has 20 observations and 160 variables. 
+
+```{r, echo=TRUE}
+#Load test data
+testData  <- read.csv("pml-testing.csv")
+dim(testData)
+
+#Apply our model to test data
+pred <- predict(modRF, testData)
+pred
+```
+
+ 
